@@ -89,8 +89,8 @@ impl ElectronShell {
 }
 
 pub struct Atom {
-    symbol : String,
     protons : u16,
+    neutrons : u16,
     electrons : u16,
     weight : f64,
     electron_shell: ElectronShell,
@@ -110,29 +110,24 @@ fn subshell_label_from_az_value(az: usize) -> String {
 
 impl Atom {
 
-    pub fn from_p_weight(symbol : String, protons_and_electrons: u16, weight: f64) -> Atom {
+    pub fn from_pe_n(protons_and_electrons: u16, neutrons : u16) -> Atom {
         Atom {
-            symbol : symbol,
             protons : protons_and_electrons,
-            weight : weight,
+            neutrons,
+            weight : (protons_and_electrons + neutrons) as f64,
             electrons : protons_and_electrons,
             electron_shell : ElectronShell::from_electrons(protons_and_electrons)
         }
     }
 
-    pub fn from_p_e_weight(symbol: String, protons : u16, electrons: u16, weight: f64) -> Atom {
+    pub fn from_p_e_n(protons : u16, electrons: u16, neutrons: u16) -> Atom {
         Atom {
-            symbol : symbol,
-            protons : protons,
-            weight : weight,
-            electrons : electrons,
+            protons,
+            neutrons,
+            weight : (protons + neutrons) as f64,
+            electrons,
             electron_shell : ElectronShell::from_electrons(electrons)
         }
-    }
-
-    /// Return the symbol of the atom
-    pub fn symbol(&self) -> &String {
-        &self.symbol
     }
 
     /// return electron shell data from this atom
@@ -145,8 +140,27 @@ impl Atom {
         self.protons
     }
 
+    /// Return the total amount of electrons from this atom
+    pub fn electrons(&self) -> u16 {
+        self.electrons
+    }
+
+    /// Return the total amount of neutrons from this atom
+    pub fn neutrons(&self) -> u16 {
+        self.neutrons
+    }
+
     /// Return the atomic mass (weight) of this atom
     pub fn atomic_mass(&self) -> f64 {
         self.weight
+    }
+
+    /// Return the eletric charge of this atom (p - e)
+    pub fn electric_charge(&self) -> i16 {
+        (self.protons as i32 - self.electrons as i32) as i16
+    }
+
+    pub fn is_isotope_of(&self, other : &Atom) -> bool {
+        (self.protons == other.protons)
     }
 }
