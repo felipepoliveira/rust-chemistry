@@ -2,7 +2,10 @@ mod atoms;
 
 fn main() {
 
-   let ne = atoms::Atom::from_pen(108);
-   println!("{:?}", ne.electron_shell());
+   let mut atoms = Vec::<atoms::Atom>::new();
+
+   for e in 18..=26 {
+      println!("{:?}", atoms::Atom::from_pen(e).electron_shell());
+   }
    
 }

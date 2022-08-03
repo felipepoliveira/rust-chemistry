@@ -67,7 +67,8 @@ impl ElectronShell {
 
         let mut max_orbits_per_shell : u16 = 1;
         let mut current_orbits_per_shell: u16 = 0;
-        let mut electrons_in_current_shell :  u16 = 0;
+        let mut electrons_in_current_shell :  u16 = 2;
+        let mut electron_per_shell_sum : u16 = 0;
 
         // go to 1s, 2s, 3s, 4s ...
          for n_shell_loop in 0..num_of_electrons {
@@ -98,25 +99,29 @@ impl ElectronShell {
                 electrons_per_subshell.push(max_electrons_in_subshell);
 
                 // increase the number of electrons per shell and add an orbit in the counter
-                electrons_in_current_shell += max_electrons_in_subshell;
                 current_orbits_per_shell += 1;
-
-                println!("{}-", az);
                 
                 // check if the current orbit reached the max orbits per shell limit or 
                 // reached the limit of electrons in the electrons shell
-                if current_orbits_per_shell == max_orbits_per_shell || electrons >= num_of_electrons{
+                if current_orbits_per_shell == max_orbits_per_shell && electron_per_shell_sum < num_of_electrons{
 
-                    println!("{} <>", az);
+                    electron_per_shell_sum += electrons_in_current_shell;
+
+                    
                     // add the total number of electrons in thell
-                    electrons_per_shell.push(electrons_in_current_shell);
+                    if electron_per_shell_sum <=  num_of_electrons {
+                        electrons_per_shell.push(electrons_in_current_shell);
+                    }
+                    else {
+                        electrons_per_shell.push(electrons_in_current_shell - (electron_per_shell_sum - num_of_electrons));
+                    }
+                    
 
-                    // reset the sum and the counter
-                    electrons_in_current_shell = 0;
-                    current_orbits_per_shell = 0;
+                    // calculate next value
+                    electrons_in_current_shell = 2 + electrons_in_current_shell + 4 * max_orbits_per_shell;
 
-                    // increase the maximum number of orbits per shell
                     max_orbits_per_shell += 1;
+                    current_orbits_per_shell = 0;
                 }
 
                 // break if reached limit
@@ -131,14 +136,17 @@ impl ElectronShell {
             }
          }
 
-         // adjust the electron_per_shell octect rule
-         if *electrons_per_shell.last().unwrap() > 8 {
-            let last_electon_shell_value = *electrons_per_shell.last().unwrap();
-            electrons_per_shell.pop();
-            electrons_per_shell.push(8);
-            electrons_per_shell.push(last_electon_shell_value - 8);
+         // add if remaining
+         if electron_per_shell_sum < num_of_electrons {
+            electrons_per_shell.push(num_of_electrons - electron_per_shell_sum);
          }
-         
+
+        //  while *electrons_per_shell.last().unwrap() > 8 {
+        //     let last_electron_shell = *electrons_per_shell.last().unwrap();
+        //     electrons_per_shell.pop();
+        //     electrons_per_shell.push(8);
+        //     electrons_per_shell.push(last_electron_shell - 8);
+        //  }
 
         ElectronShell { 
             electrons: num_of_electrons, 
