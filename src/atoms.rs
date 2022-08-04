@@ -40,9 +40,10 @@ impl ChemicalSet {
 #[derive(Debug)]
 pub struct ElectronShell {
     electrons : u16,
-    electrons_per_shell : Vec<u16>,
-    electrons_per_subshell : Vec<u16>,
+    electrons_per_shell : Vec<u8>,
+    electrons_per_subshell : Vec<u8>,
     azimuthal_quantum_numbers_per_subshell : Vec<u8>,
+    block : u8,
     //chemical_sets : Vec<ChemicalSet>,
 }
 
@@ -56,19 +57,17 @@ impl ElectronShell {
         let mut electrons : u16 = 0;
 
         // store shell data
-        let mut electrons_per_shell = Vec::<u16>::new();
+        let mut electrons_per_shell = Vec::<u8>::new();
 
         // store subshell data
-        let mut electrons_per_subshell = Vec::<u16>::new();
+        let mut electrons_per_subshell = Vec::<u8>::new();
         let mut azimuthal_quantum_numbers_per_subshell : Vec<u8> = Vec::new();
         
         // store the maximum azimuthal quantum number
-        let mut max_azimuthal_quantum_number : u16 = 0;
+        let mut max_azimuthal_quantum_number : u8 = 0;
 
-        let mut max_orbits_per_shell : u16 = 1;
-        let mut current_orbits_per_shell: u16 = 0;
-        let mut electrons_in_current_shell :  u16 = 2;
-        let mut electron_per_shell_sum : u16 = 0;
+        // store the electron shell furthest block
+        let mut block : u8 = 0;
 
         // go to 1s, 2s, 3s, 4s ...
          for n_shell_loop in 0..num_of_electrons {
@@ -88,71 +87,39 @@ impl ElectronShell {
                 azimuthal_quantum_numbers_per_subshell.push(az as u8);
 
                 // increase the total amount of counted electrons
-                electrons += max_electrons_in_subshell;
+                electrons += max_electrons_in_subshell as u16;
 
                 // if the electrons count exceeds the limit, decrease it to reach the max electrons
-                if electrons > num_of_electrons {
-                    max_electrons_in_subshell -= electrons - num_of_electrons;
+                if electrons > num_of_electrons as u16 {
+                    max_electrons_in_subshell -= electrons as u8 - num_of_electrons as u8;
                 }
 
                 // include the electrons in the shell counter
                 electrons_per_subshell.push(max_electrons_in_subshell);
 
-                // increase the number of electrons per shell and add an orbit in the counter
-                current_orbits_per_shell += 1;
-                
-                // check if the current orbit reached the max orbits per shell limit or 
-                // reached the limit of electrons in the electrons shell
-                if current_orbits_per_shell == max_orbits_per_shell && electron_per_shell_sum < num_of_electrons{
-
-                    electron_per_shell_sum += electrons_in_current_shell;
-
-                    
-                    // add the total number of electrons in thell
-                    if electron_per_shell_sum <=  num_of_electrons {
-                        electrons_per_shell.push(electrons_in_current_shell);
-                    }
-                    else {
-                        electrons_per_shell.push(electrons_in_current_shell - (electron_per_shell_sum - num_of_electrons));
-                    }
-                    
-
-                    // calculate next value
-                    electrons_in_current_shell = 2 + electrons_in_current_shell + 4 * max_orbits_per_shell;
-
-                    max_orbits_per_shell += 1;
-                    current_orbits_per_shell = 0;
+                // store the furthest block
+                if az as u8 > block {
+                    block = az as u8;
                 }
 
                 // break if reached limit
-                if electrons >= num_of_electrons {
+                if electrons >= num_of_electrons as u16 {
                     break;
                 }
             }
             
             // break if reached limit
-            if electrons >= num_of_electrons {
+            if electrons >= num_of_electrons as u16 {
                 break;
             }
          }
-
-         // add if remaining
-         if electron_per_shell_sum < num_of_electrons {
-            electrons_per_shell.push(num_of_electrons - electron_per_shell_sum);
-         }
-
-        //  while *electrons_per_shell.last().unwrap() > 8 {
-        //     let last_electron_shell = *electrons_per_shell.last().unwrap();
-        //     electrons_per_shell.pop();
-        //     electrons_per_shell.push(8);
-        //     electrons_per_shell.push(last_electron_shell - 8);
-        //  }
 
         ElectronShell { 
             electrons: num_of_electrons, 
             electrons_per_shell,
             electrons_per_subshell, 
             azimuthal_quantum_numbers_per_subshell, 
+            block
             //chemical_sets : ChemicalSet::from_valence_electrons(valence_electrons, valence_az) 
         }
     }
@@ -168,7 +135,7 @@ impl ElectronShell {
     }
 
     /// Return the amount of electrons per shell in order from the closest to the nucleus to the farthest
-    pub fn electrons_per_subshell(&self) -> &Vec<u16> {
+    pub fn electrons_per_subshell(&self) -> &Vec<u8> {
         &self.electrons_per_subshell
     }
 
@@ -180,6 +147,16 @@ impl ElectronShell {
                 format!("{}{} ", e_value, subshell_label_from_az_value(*e_az as usize))
             })
             .collect()
+    }
+
+    /// Return the block index of this electron shell
+    pub fn block(&self) -> &u8 {
+        &self.block
+    }
+
+    /// Return the string representation of the block
+    pub fn block_to_string(&self) -> String {
+        subshell_label_from_az_value(self.block as usize)
     }
 
     // pub fn chemical_sets(&self) -> &Vec<ChemicalSet> {
