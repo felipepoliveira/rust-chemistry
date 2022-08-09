@@ -1,235 +1,194 @@
 use std::collections::HashMap;
 
 #[derive(Debug)]
-pub enum ChemicalSet {
-    AlkaliMetal,
-    AlkaliEarthMetal,
-    Chalcogen,
-    Halogen,
-    NobleGas,
+pub struct ElectronSubshell {
+    level : u8,
+    shell : u8,
+    electrons : u8,
 }
 
-impl ChemicalSet {
-    /// Calculate and return the chemical sets of an element depending on its electrons
-    pub fn from_valence_electrons(
-        electrons_in_valence_orbital: u16,
-        az_quantum_number_in_valence_orbital: u16,
-    ) -> Vec<ChemicalSet> {
-        // calculate the chemical set based on the value from the electrons on the valence
-        let chemical_set_from_valence_electrons = match (
-            az_quantum_number_in_valence_orbital,
-            electrons_in_valence_orbital,
-        ) {
-            // l=0, h.l=s, e=1
-            (0, 1) => Some(ChemicalSet::AlkaliMetal),
-            // l=0, h.l=s, e=2
-            (0, 2) => Some(ChemicalSet::AlkaliEarthMetal),
-            // l=1, h.l=p, e=4
-            (1, 4) => Some(ChemicalSet::Chalcogen),
-            // l=1, h.l=p, e=5
-            (1, 5) => Some(ChemicalSet::Halogen),
-            // l=1, h.l=p, e=6
-            (1, 6) => Some(ChemicalSet::NobleGas),
-            _ => None,
-        };
+impl ElectronSubshell {
+    pub fn from_lse(level : u8, shell : u8, electrons : u8) -> ElectronSubshell {
+        ElectronSubshell { level, shell, electrons }
+    }
 
-        // the vector that will be returned
-        let mut chemical_sets = Vec::<ChemicalSet>::new();
-
-        // store the chemical set if returned some
-        if let Some(chemical_set) = chemical_set_from_valence_electrons {
-            chemical_sets.push(chemical_set);
-        }
-
-        return chemical_sets;
+    pub fn to_string(&self) -> String {
+        format!("{}{}{} ", (self.level), subshell_label_from_az_value(self.shell as usize), self.electrons)
     }
 }
 
 #[derive(Debug)]
 pub struct ElectronShell {
     electrons: u16,
-    electrons_per_shell: Vec<u8>,
-    electrons_per_subshell: Vec<u8>,
-    azimuthal_quantum_numbers_per_subshell: Vec<u8>,
-    block: u8,
-    //chemical_sets : Vec<ChemicalSet>,
+    electrons_map: Vec<Vec<u8>>,
+    aphelion_shell: u8,
+    azimuthal_qn : u8,
+    last_shell : u8
 }
 
+
 impl ElectronShell {
-    pub fn from_electrons(num_of_electrons: u16) -> ElectronShell {
-        if num_of_electrons > 60000 {
+    pub fn from_electrons(num_of_electrons: usize) -> ElectronShell {
+        const MAX_ELECTRONS: usize = 5000;
+
+        // validate max num of electrons to prevent numeric variable calculation overflow
+        if num_of_electrons > MAX_ELECTRONS {
             panic!(
-                "The maximum amount of electrons that can be calculated is 60000. {} given",
-                num_of_electrons
-            )
+                "Can only calculate with maximum of {} electrons",
+                MAX_ELECTRONS
+            );
         }
 
-        // store total electrons
-        let mut electrons: u16 = 0;
+        let mut electrons_map: Vec<Vec<u8>> = Vec::new();
+        let mut azimuthal_qn : u8 = 0;
+        let mut aphelion_shell : u8 = 1;
 
-        // store shell data
-        let mut electrons_per_shell = Vec::<u8>::new();
+        // iteration controllers
+        let mut max_level: usize = 1; // current level
+        let mut s: usize = 1; // current shell
+        let mut es: usize = 0; // total electrons sum
 
-        // store subshell data
-        let mut electrons_per_subshell = Vec::<u8>::new();
-        let mut azimuthal_quantum_numbers_per_subshell: Vec<u8> = Vec::new();
-
-        // store the maximum azimuthal quantum number
-        let mut max_azimuthal_quantum_number: u8 = 0;
-
-        // store the electron shell furthest block
-        let mut block: u8 = 0;
-
-        // go to 1s, 2s, 3s, 4s ...
-        for n_shell_loop in 0..num_of_electrons {
-            // for each 2 'n' orbit increase the azimuthal quantum number + 1
-            if n_shell_loop != 0 && n_shell_loop % 2 == 0 {
-                max_azimuthal_quantum_number += 1;
+        // shell loop
+        loop {
+            // increase the shell layer
+            while electrons_map.len() < s {
+                electrons_map.push(Vec::<u8>::new());
             }
 
-            // calculate subshell values
-            for az in (0..=max_azimuthal_quantum_number).rev() {
-                // calculate the maximum amount of electrons in the current azimuthal quantum number
-                // me = 4 * (l + 1) - 2;
-                let mut max_electrons_in_subshell = 4 * (az + 1) - 2;
+            //  get the electron shell vec
+            let electron_shell_vec = electrons_map.get_mut(s - 1).unwrap();
 
-                // store the current azimuthal quantum number
-                azimuthal_quantum_numbers_per_subshell.push(az as u8);
+            // calculate the maximum amount of electrons in the current shell
+            let mut max_electrons_in_s = (s * 2 - 1) * 2;
 
-                // increase the total amount of counted electrons
-                electrons += max_electrons_in_subshell as u16;
-
-                // if the electrons count exceeds the limit, decrease it to reach the max electrons
-                if electrons > num_of_electrons as u16 {
-                    max_electrons_in_subshell -= electrons as u8 - num_of_electrons as u8;
-                }
-
-                // include the electrons in the shell counter
-                electrons_per_subshell.push(max_electrons_in_subshell);
-
-                // store the furthest block
-                if az as u8 > block {
-                    block = az as u8;
-                }
-
-                // break if reached limit
-                if electrons >= num_of_electrons as u16 {
-                    break;
-                }
+            // prevent exceeding the maximum amount of electrons
+            if max_electrons_in_s + es > num_of_electrons {
+                max_electrons_in_s = num_of_electrons - es;
             }
 
-            // break if reached limit
-            if electrons >= num_of_electrons as u16 {
+            // sum up electrons and add it on the vector
+            es += max_electrons_in_s;
+            electron_shell_vec.push(max_electrons_in_s as u8);
+
+            // set the block
+            if s as u8 > aphelion_shell {
+                aphelion_shell = s as u8;
+            }
+
+            // set the az qn value
+            azimuthal_qn = max_level as u8 - 1;
+
+            // interrupt
+            if es >= num_of_electrons {
                 break;
             }
-        }
 
-        // check if the electron shell has more than 1 subshell
-        let more_than_one_subshell = azimuthal_quantum_numbers_per_subshell.len() >= 2;
+            // reached the 's' shell
+            if s == 1 {
 
-        // store the number of electrons in the last shell
-        let az_in_the_last_shell = *azimuthal_quantum_numbers_per_subshell.last().unwrap();
-        let last_subshell_is_d_block_or_higher = az_in_the_last_shell >= 2;
+                max_level += 1;
 
-        // if that makes electron orbit shell s/d block balance
-        if more_than_one_subshell && last_subshell_is_d_block_or_higher {
-            // get the electrons the last shell and calculate the max electrons in the shell
-            let electrons_in_the_last_shell = *electrons_per_subshell.last().unwrap();
-            let max_value_in_last_shell =
-                (azimuthal_quantum_numbers_per_subshell.last().unwrap() * 2 + 1) * 2;
-
-            // store the penultimate electron shell number of electrons, az.q number
-            let penultimate_subshell_electrons = *electrons_per_subshell
-                .get(electrons_per_subshell.len() - 2)
-                .unwrap();
-            let penultimate_subshell_az = *azimuthal_quantum_numbers_per_subshell
-                .get(azimuthal_quantum_numbers_per_subshell.len() - 2)
-                .unwrap();
-            let penultimate_subshell_is_s_block = penultimate_subshell_az == 0;
-
-            // check if the penultimate subshell is a s block and...
-            // if rest 1 number to complete the electrons in the last shell
-            if penultimate_subshell_is_s_block
-                && last_subshell_is_d_block_or_higher
-                && (electrons_in_the_last_shell + 1) % (max_value_in_last_shell / 2) == 0
-            {
-                // remove 1 electron from the penultimate s shell and replace it in the next shell
-                let penultimate_index = electrons_per_subshell.len() - 2 as usize;
-                let last_index = electrons_per_subshell.len() - 1 as usize;
-
-                electrons_per_subshell[penultimate_index] = penultimate_subshell_electrons - 1;
-                electrons_per_subshell[last_index] = electrons_in_the_last_shell + 1;
+                // the shell will always start on ceil(current level / 2)
+                //if cl = 2 then next shell will be 1 (because ceil of 1)
+                //if cl = 3 then next shell will be 1 (because ceil of 1.5)
+                //if cl = 4 then next shell will be 2 (because ceil of 2)
+                s = f32::ceil(max_level as f32 / 2.0) as usize;
+            }
+            // decrease shell level until reach the 's' shell
+            else {
+                s -= 1;
             }
         }
 
-        
-        let mut e_level_map_sum : HashMap<u8, u8> = HashMap::new();
+        ElectronShell {
+            electrons: num_of_electrons as u16,
+            electrons_map,
+            aphelion_shell, 
+            azimuthal_qn,
+            last_shell : s as u8
+        }
+    }
 
-        let mut electrons_per_subshell_iter = electrons_per_subshell.iter();
+    pub fn electron_subshell(&self) -> Vec<ElectronSubshell> {
+        let mut vec : Vec<ElectronSubshell> = Vec::new();
 
-        for  az in azimuthal_quantum_numbers_per_subshell.iter() {
+        // go until the farthest  shell
+        let mut max_shell : u8 = 1;
+        for level_i in 0..=self.azimuthal_qn {
 
-            let e = electrons_per_subshell_iter.next().unwrap();
+            for shell_i in 0..max_shell{
+                let shell_i = shell_i as usize;
+                let electron_i = level_i as usize - shell_i;
+
+                // interrupt if there is no value in shell/electron coordinate
+                match self.electrons_map.get(shell_i) {
+                    Some(electrons_vec) => {
+
+                        // interrupt if there is no electrons
+                        match electrons_vec.get(electron_i) {
+                            Some(e) => vec.push(ElectronSubshell { level: level_i + 1, shell: shell_i as u8, electrons: *e }),
+                            None => break
+                        }
+                    },
+                    None => break
+                }
+            }
+            max_shell += 1;
+        }
+
+        // check if this is a d'block electron shell
+        if self.last_shell == 3 {
+            let s_block_index = vec.len() - 1;
+            let d_block_index = vec.len() - 2;
+            let d_block_e = vec.get(d_block_index).unwrap();
+
+            // exception for 3d-series block
+            if d_block_e.level == 3 {
+                // if electrons in d'block shell are 4 or 9
+                if d_block_e.electrons == 4 || d_block_e.electrons == 9 {
+                    vec[s_block_index].electrons -= 1;
+                    vec[d_block_index].electrons += 1;
+                }
+            }
+            // exceptions for 4d-series block
+            else if d_block_e.level == 4 {
+                // if electrons in d'block shell are 4 or 9
+                if d_block_e.electrons >= 3 && d_block_e.electrons <= 4 || d_block_e.electrons >= 6 && d_block_e.electrons <= 7 || d_block_e.electrons == 9{
+                    vec[s_block_index].electrons -= 1;
+                    vec[d_block_index].electrons += 1;
+                }
+                // when it is 8
+                else if d_block_e.electrons == 8 {
+                    vec.pop(); // remove the s block
+                    vec[d_block_index].electrons += 2;
+                }
+            }
+            // exceptions for 5d-series block
+            else if d_block_e.level == 5 {
+                if d_block_e.electrons >= 8 && d_block_e.electrons <= 9 {
+                    vec[s_block_index].electrons -= 1;
+                    vec[d_block_index].electrons += 1;
+                }
+            }
+            // exceptions for 6d-series block
+            else if d_block_e.level == 6 {
+                // if electrons in d'block shell are 1 the last valence d block will be removed and replaced by an valence p block
+                if d_block_e.electrons == 1 {
+                    vec.swap(d_block_index, s_block_index); // put the s block electrons in the d block
+                    vec.pop().unwrap(); // remove the d block
+                    vec.push(ElectronSubshell { level: 7, shell: 1, electrons: 1 }) // include in the last block a 7p1
+                }
+            }
             
         }
 
-
-        ElectronShell {
-            electrons: num_of_electrons,
-            electrons_per_shell,
-            electrons_per_subshell,
-            azimuthal_quantum_numbers_per_subshell,
-            block, //chemical_sets : ChemicalSet::from_valence_electrons(valence_electrons, valence_az)
-        }
+        vec
     }
 
-    /// Return the azimuthal quantum number on this the electron shell in order from the closest to the nucleus to the farthest
-    pub fn azimuthal_quantum_numbers_per_subshell(&self) -> &Vec<u8> {
-        &self.azimuthal_quantum_numbers_per_subshell
+    pub fn electron_subshell_to_string(&self) -> String {
+        self.electron_subshell().iter().map(|e| e.to_string()).collect()
     }
 
-    /// Return the total amount of electrons from this electron shell
-    pub fn total_electrons(&self) -> u16 {
-        self.electrons
-    }
-
-    /// Return the amount of electrons per shell in order from the closest to the nucleus to the farthest
-    pub fn electrons_per_subshell(&self) -> &Vec<u8> {
-        &self.electrons_per_subshell
-    }
-
-    pub fn electrons_per_shell(&self) -> &Vec<u8> {
-        &self.electrons_per_shell
-    }
-
-    /// Return an string representation from the shells
-    pub fn subshell_to_string(&self) -> String {
-        self.electrons_per_subshell
-            .iter()
-            .zip(self.azimuthal_quantum_numbers_per_subshell.iter())
-            .map(|(e_value, e_az)| {
-                format!(
-                    "{}{} ",
-                    e_value,
-                    subshell_label_from_az_value(*e_az as usize)
-                )
-            })
-            .collect()
-    }
-
-    /// Return the block index of this electron shell
-    pub fn block(&self) -> &u8 {
-        &self.block
-    }
-
-    /// Return the string representation of the block
-    pub fn block_to_string(&self) -> String {
-        subshell_label_from_az_value(self.block as usize)
-    }
-
-    // pub fn chemical_sets(&self) -> &Vec<ChemicalSet> {
-    //     &self.chemical_sets
-    // }
 }
 
 #[derive(Debug)]
@@ -260,7 +219,7 @@ impl Atom {
             neutrons,
             weight: (protons + neutrons) as f64,
             electrons,
-            electron_shell: ElectronShell::from_electrons(electrons),
+            electron_shell: ElectronShell::from_electrons(electrons as usize),
         }
     }
 
